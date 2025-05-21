@@ -2,6 +2,7 @@ import random
 import string
 import ast_nodes as ast
 
+
 class NameGenerator:
     def __init__(self, prefix="obf_"):
         self.prefix = prefix
@@ -20,6 +21,7 @@ class NameGenerator:
         self.used_names = set()
         self.counter = 0
 
+
 class ObfuscationPass:
     def __init__(self):
         self.name_gen = NameGenerator()
@@ -27,7 +29,7 @@ class ObfuscationPass:
     def visit(self, node, symbol_map=None, **kwargs):
         if node is None:
             return None
-        
+
         method_name = 'visit_' + node.__class__.__name__.lower()
         visitor_method = getattr(self, method_name, self.generic_visit)
         return visitor_method(node, symbol_map, **kwargs)
@@ -40,7 +42,7 @@ class ObfuscationPass:
                     if isinstance(attr_value, ast.Node):
                         new_child = self.visit(attr_value, symbol_map, **kwargs)
                         if new_child is not attr_value:
-                             setattr(node, attr_name, new_child)
+                            setattr(node, attr_name, new_child)
                     elif isinstance(attr_value, list):
                         new_list_content = []
                         changed = False
@@ -52,7 +54,7 @@ class ObfuscationPass:
                                     changed = True
                             else:
                                 new_list_content.append(item)
-                        
+
                         if changed:
                             setattr(node, attr_name, new_list_content)
                 except AttributeError:
@@ -61,6 +63,7 @@ class ObfuscationPass:
 
     def apply(self, ast_root):
         raise NotImplementedError("Each obfuscation pass must implement 'apply'")
+
 
 class IdentifierRenamingPass(ObfuscationPass):
     def __init__(self, rename_functions=True, rename_variables=True, rename_parameters=True):
@@ -86,33 +89,34 @@ class IdentifierRenamingPass(ObfuscationPass):
     def visit_functiondefnode(self, node, symbol_map=None, **kwargs):
         is_definition_phase = kwargs.get('is_definition_phase')
         original_func_name = node.name.name
-        
+
         if is_definition_phase:
             if self.rename_functions and original_func_name not in self.global_symbol_map:
-                if original_func_name not in ["main", "printf", "scanf"]: # Exclude built-ins/entry
+                if original_func_name not in ["main", "printf", "scanf"]:  # Exclude built-ins/entry
                     self.global_symbol_map[original_func_name] = self.name_gen.new_name(original_func_name)
-            
+
             current_function_local_map = {}
             if self.rename_parameters and node.params:
                 for param in node.params:
-                    if param.name and param.name.name: # Ensure param and its name exist
-                         original_param_name = param.name.name
-                         current_function_local_map[original_param_name] = self.name_gen.new_name(original_param_name)
-            
+                    if param.name and param.name.name:  # Ensure param and its name exist
+                        original_param_name = param.name.name
+                        current_function_local_map[original_param_name] = self.name_gen.new_name(original_param_name)
+
             if self.rename_variables and node.body:
                 self._collect_local_vars_for_map(node.body, current_function_local_map)
-            node.temp_local_scope_map = current_function_local_map # Attach map to node
-        
+            node.temp_local_scope_map = current_function_local_map  # Attach map to node
+
         else:
             if self.rename_functions and original_func_name in self.global_symbol_map:
                 node.name.name = self.global_symbol_map[original_func_name]
 
             retrieved_local_map = getattr(node, 'temp_local_scope_map', {})
-            
+
             if self.rename_parameters and node.params:
                 for i in range(len(node.params)):
                     # ParamNode itself needs to be visited to rename its IdentifierNode (name)
-                    node.params[i] = self.visit(node.params[i], symbol_map, current_function_scope_map=retrieved_local_map, **kwargs)
+                    node.params[i] = self.visit(node.params[i], symbol_map,
+                                                current_function_scope_map=retrieved_local_map, **kwargs)
 
             if node.body:
                 body_kwargs = kwargs.copy()
@@ -136,7 +140,7 @@ class IdentifierRenamingPass(ObfuscationPass):
             self._collect_local_vars_for_map(node_to_scan.body, local_map)
         elif isinstance(node_to_scan, ast.ForNode):
             if node_to_scan.init and isinstance(node_to_scan.init, ast.VarDeclNode):
-                self._collect_local_vars_for_map(node_to_scan.init, local_map) # Var in for-init
+                self._collect_local_vars_for_map(node_to_scan.init, local_map)  # Var in for-init
             if node_to_scan.body: self._collect_local_vars_for_map(node_to_scan.body, local_map)
 
     def visit_paramnode(self, node, symbol_map=None, **kwargs):
@@ -155,11 +159,11 @@ class IdentifierRenamingPass(ObfuscationPass):
         if not is_definition_phase and self.rename_variables:
             if current_function_scope_map and node.name and node.name.name in current_function_scope_map:
                 node.name.name = current_function_scope_map[node.name.name]
-        
+
         if node.initializer:
             node.initializer = self.visit(node.initializer, symbol_map, **kwargs)
         return node
-            
+
     def visit_identifiernode(self, node, symbol_map=None, **kwargs):
         is_definition_phase = kwargs.get('is_definition_phase')
         current_function_scope_map = kwargs.get('current_function_scope_map')
@@ -177,7 +181,7 @@ class IdentifierRenamingPass(ObfuscationPass):
 
         if node.name:
             node.name = self.visit(node.name, symbol_map, **kwargs)
-        
+
         if node.args:
             new_args = []
             for arg in node.args:
@@ -227,18 +231,27 @@ class IdentifierRenamingPass(ObfuscationPass):
     def visit_blocknode(self, node, symbol_map=None, **kwargs):
         if node.statements:
             for i in range(len(node.statements)):
-                 node.statements[i] = self.visit(node.statements[i], symbol_map, **kwargs)
+                node.statements[i] = self.visit(node.statements[i], symbol_map, **kwargs)
         return node
 
     def visit_exprstatementnode(self, node, symbol_map=None, **kwargs):
         if node.expr: node.expr = self.visit(node.expr, symbol_map, **kwargs)
         return node
 
-    def visit_typenode(self, node, symbol_map=None, **kwargs): return node
-    def visit_numberliteralnode(self, node, symbol_map=None, **kwargs): return node
-    def visit_charliteralnode(self, node, symbol_map=None, **kwargs): return node
-    def visit_stringliteralnode(self, node, symbol_map=None, **kwargs): return node
-    def visit_boolliteralnode(self, node, symbol_map=None, **kwargs): return node
+    def visit_typenode(self, node, symbol_map=None, **kwargs):
+        return node
+
+    def visit_numberliteralnode(self, node, symbol_map=None, **kwargs):
+        return node
+
+    def visit_charliteralnode(self, node, symbol_map=None, **kwargs):
+        return node
+
+    def visit_stringliteralnode(self, node, symbol_map=None, **kwargs):
+        return node
+
+    def visit_boolliteralnode(self, node, symbol_map=None, **kwargs):
+        return node
 
 
 # --- 2. Dead Code Insertion Pass ---
@@ -249,7 +262,7 @@ class DeadCodeInsertionPass(ObfuscationPass):
 
     def apply(self, ast_root):
         self.name_gen.reset()
-        self.visit(ast_root) # Pass ast_root, symbol_map=None, **kwargs (empty kwargs ok for this pass)
+        self.visit(ast_root)  # Pass ast_root, symbol_map=None, **kwargs (empty kwargs ok for this pass)
         return ast_root
 
     def _create_random_dead_statement(self):
@@ -270,7 +283,7 @@ class DeadCodeInsertionPass(ObfuscationPass):
                 # and dead code needs to be inserted within it.
                 visited_stmt = self.visit(stmt, symbol_map, **kwargs)
                 new_statements.append(visited_stmt)
-                
+
                 if not isinstance(visited_stmt, ast.ReturnNode) and random.random() < self.probability:
                     dead_stmt = self._create_random_dead_statement()
                     if dead_stmt:
@@ -296,7 +309,7 @@ class DeadCodeInsertionPass(ObfuscationPass):
     def visit_fornode(self, node, symbol_map=None, **kwargs):
         if node.body: node.body = self.visit(node.body, symbol_map, **kwargs)
         return node
-    
+
 
 class Obfuscator:
     def __init__(self, techniques=None):
@@ -309,14 +322,14 @@ class Obfuscator:
         if "dead_code" in techniques:
             self.passes.append(DeadCodeInsertionPass(probability=0.25))
 
-
     def apply_passes(self, ast_root):
         current_ast = ast_root
         for p_instance in self.passes:
             print(f"Applying pass: {p_instance.__class__.__name__}")
-            current_ast = p_instance.apply(current_ast) 
+            current_ast = p_instance.apply(current_ast)
             if current_ast is None:
-                print(f"Error: Pass {p_instance.__class__.__name__} returned None. Reverting to original AST for this pass.")
+                print(
+                    f"Error: Pass {p_instance.__class__.__name__} returned None. Reverting to original AST for this pass.")
 
                 return ast_root
         return current_ast
