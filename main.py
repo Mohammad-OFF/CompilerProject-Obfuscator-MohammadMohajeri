@@ -1,24 +1,19 @@
-# main.py
 import sys
 from antlr4 import FileStream, CommonTokenStream, InputStream, tree  # ANTLR imports
 
-# Ensure 'generated_parser' is accessible.
 from generated_parser.MiniCLexer import MiniCLexer
 from generated_parser.MiniCParser import MiniCParser
 
 from ast_builder_visitor import ASTBuilderVisitor  # Our custom visitor to build our AST
 import ast_nodes as custom_ast  # Our custom AST node definitions (for reference/type checking)
 
-# Import the module itself to inspect its path and then access its class
 import code_generator
 from obfuscator_passes import Obfuscator
 
-# --- MORE DEBUGGING: Print the path of the imported module ---
-# This will execute as soon as main.py is loaded, before the main() function runs.
+
 print(f"DEBUG: Path to imported 'code_generator' module: {code_generator.__file__}")
 
 
-# --- END MORE DEBUGGING ---
 
 def main():
     if len(sys.argv) < 2:
@@ -26,7 +21,7 @@ def main():
         sys.exit(1)
 
     input_filepath = sys.argv[1]
-    output_filepath = "output.mc"  # Default output filename as per project spec
+    output_filepath = "output.mc"
     if len(sys.argv) > 2:
         output_filepath = sys.argv[2]
 
@@ -41,12 +36,11 @@ def main():
 
     print(f"Attempting to parse '{input_filepath}'...")
 
-    # 1. Lexing and Parsing with ANTLR
     lexer = MiniCLexer(input_stream)
     stream = CommonTokenStream(lexer)
     parser = MiniCParser(stream)
 
-    parse_tree = parser.program()  # Start parsing from the 'program' rule in MiniC.g4
+    parse_tree = parser.program()
 
     if parser.getNumberOfSyntaxErrors() > 0:
         print(f"Parsing failed for '{input_filepath}' due to {parser.getNumberOfSyntaxErrors()} syntax error(s).")
@@ -54,7 +48,6 @@ def main():
 
     print("ANTLR parsing successful. Building custom AST...")
 
-    # 2. Build our custom AST using the ASTBuilderVisitor
     ast_builder = ASTBuilderVisitor()
     custom_ast_tree = ast_builder.visit(parse_tree)
 
@@ -66,7 +59,6 @@ def main():
 
     print("Custom AST built successfully.")
 
-    # --- Apply Obfuscation (This part uses our custom AST) ---
     techniques_to_apply = ["rename_identifiers", "dead_code"]
 
     obfuscator = Obfuscator(techniques=techniques_to_apply)
@@ -75,11 +67,9 @@ def main():
     modified_ast = obfuscator.apply_passes(custom_ast_tree)
     print("--- Obfuscation Complete ---\n")
 
-    # --- Code Generation from Modified Custom AST (This part uses our custom AST) ---
-    # Explicitly use the imported module to create the instance
+
     generator = code_generator.CodeGenerator()
 
-    # --- DEBUGGING ---
     print(f"Type of generator object: {type(generator)}")
     print(f"Attributes of generator object (dir(generator)): {dir(generator)}")
     if hasattr(generator, 'generate'):
@@ -87,7 +77,6 @@ def main():
     else:
         print(
             "Generator object DOES NOT HAVE 'generate' attribute. Check the file printed by the DEBUG line at the top.")
-    # --- END DEBUGGING ---
 
     generated_code = generator.generate(modified_ast)  # This line was causing the error
 
