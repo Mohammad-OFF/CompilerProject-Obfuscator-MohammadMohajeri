@@ -1,16 +1,14 @@
-# obfuscator_passes.py
 import random
 import string
 import ast_nodes as ast # Assuming your AST nodes are in ast_nodes.py
 
-# --- Helper for generating new names ---
 class NameGenerator:
     def __init__(self, prefix="obf_"):
         self.prefix = prefix
         self.used_names = set()
         self.counter = 0
 
-    def new_name(self, original_name=""): # original_name can be used for hints if needed
+    def new_name(self, original_name=""):
         name = ""
         while not name or name in self.used_names:
             self.counter += 1
@@ -22,7 +20,6 @@ class NameGenerator:
         self.used_names = set()
         self.counter = 0
 
-# --- Obfuscation Pass Base Class ---
 class ObfuscationPass:
     def __init__(self):
         self.name_gen = NameGenerator()
@@ -36,17 +33,15 @@ class ObfuscationPass:
         return visitor_method(node, symbol_map, **kwargs)
 
     def generic_visit(self, node, symbol_map=None, **kwargs):
-        # Iterate over attributes that might be single AST nodes or lists of AST nodes
         for attr_name in dir(node):
             if not attr_name.startswith('_') and attr_name not in ['line_no', 'parent', 'temp_local_scope_map']:
                 try:
                     attr_value = getattr(node, attr_name)
                     if isinstance(attr_value, ast.Node):
                         new_child = self.visit(attr_value, symbol_map, **kwargs)
-                        if new_child is not attr_value: # Reassign if a new node instance was returned
+                        if new_child is not attr_value:
                              setattr(node, attr_name, new_child)
                     elif isinstance(attr_value, list):
-                        # Process lists, potentially replacing nodes within the list
                         new_list_content = []
                         changed = False
                         for item in attr_value:
@@ -56,23 +51,17 @@ class ObfuscationPass:
                                 if visited_item is not item:
                                     changed = True
                             else:
-                                new_list_content.append(item) # Keep non-node items
+                                new_list_content.append(item)
                         
-                        if changed: # Only reassign list if content might have changed instance
-                            # This is tricky: setattr(node, attr_name, new_list_content) might not always work as expected
-                            # if the list itself should be modified in-place.
-                            # For now, let's assume we can reassign the attribute.
-                            # A safer way for lists is often to modify them in-place if possible,
-                            # or clear and extend: attr_value.clear(); attr_value.extend(new_list_content)
+                        if changed:
                             setattr(node, attr_name, new_list_content)
                 except AttributeError:
-                    pass # Some attributes might not be relevant
+                    pass
         return node
 
     def apply(self, ast_root):
         raise NotImplementedError("Each obfuscation pass must implement 'apply'")
 
-# --- 1. Identifier Renaming Pass ---
 class IdentifierRenamingPass(ObfuscationPass):
     def __init__(self, rename_functions=True, rename_variables=True, rename_parameters=True):
         super().__init__()
@@ -114,7 +103,7 @@ class IdentifierRenamingPass(ObfuscationPass):
                 self._collect_local_vars_for_map(node.body, current_function_local_map)
             node.temp_local_scope_map = current_function_local_map # Attach map to node
         
-        else: # Application phase
+        else:
             if self.rename_functions and original_func_name in self.global_symbol_map:
                 node.name.name = self.global_symbol_map[original_func_name]
 
@@ -131,12 +120,12 @@ class IdentifierRenamingPass(ObfuscationPass):
                 node.body = self.visit(node.body, symbol_map, **body_kwargs)
         return node
 
-    def _collect_local_vars_for_map(self, node_to_scan, local_map): # Renamed arg
+    def _collect_local_vars_for_map(self, node_to_scan, local_map):
         if isinstance(node_to_scan, ast.BlockNode) and node_to_scan.statements:
             for stmt in node_to_scan.statements:
                 self._collect_local_vars_for_map(stmt, local_map)
         elif isinstance(node_to_scan, ast.VarDeclNode):
-            if node_to_scan.name and node_to_scan.name.name: # Check name exists
+            if node_to_scan.name and node_to_scan.name.name:
                 original_var_name = node_to_scan.name.name
                 if original_var_name not in local_map:
                     local_map[original_var_name] = self.name_gen.new_name(original_var_name)
@@ -156,8 +145,7 @@ class IdentifierRenamingPass(ObfuscationPass):
         if not is_definition_phase and self.rename_parameters:
             if current_function_scope_map and node.name and node.name.name in current_function_scope_map:
                 node.name.name = current_function_scope_map[node.name.name]
-        # TypeNode does not need renaming
-        # node.param_type = self.visit(node.param_type, ...) # If types could be complex/renamed
+
         return node
 
     def visit_vardeclnode(self, node, symbol_map=None, **kwargs):
@@ -170,32 +158,30 @@ class IdentifierRenamingPass(ObfuscationPass):
         
         if node.initializer:
             node.initializer = self.visit(node.initializer, symbol_map, **kwargs)
-        # node.var_type = self.visit(node.var_type, ...) # If type could be complex
         return node
             
     def visit_identifiernode(self, node, symbol_map=None, **kwargs):
         is_definition_phase = kwargs.get('is_definition_phase')
         current_function_scope_map = kwargs.get('current_function_scope_map')
 
-        if not is_definition_phase and node.name: # Check if name exists
+        if not is_definition_phase and node.name:
             original_id_name = node.name
             if current_function_scope_map and original_id_name in current_function_scope_map:
                 node.name = current_function_scope_map[original_id_name]
-            elif original_id_name in self.global_symbol_map: # Check global map (for function calls)
-                if original_id_name not in ["printf", "scanf"]: # Don't rename built-ins by mistake
+            elif original_id_name in self.global_symbol_map:
+                if original_id_name not in ["printf", "scanf"]:
                     node.name = self.global_symbol_map[original_id_name]
         return node
 
     def visit_functioncallnode(self, node, symbol_map=None, **kwargs):
-        # The function name itself is an IdentifierNode, so it will be handled by visit_identifiernode
-        # when we visit node.name
+
         if node.name:
-            node.name = self.visit(node.name, symbol_map, **kwargs) # Pass all kwargs including scope map
+            node.name = self.visit(node.name, symbol_map, **kwargs)
         
         if node.args:
             new_args = []
             for arg in node.args:
-                visited_arg = self.visit(arg, symbol_map, **kwargs) # Pass all kwargs
+                visited_arg = self.visit(arg, symbol_map, **kwargs)
                 if visited_arg is not None:
                     new_args.append(visited_arg)
             node.args = new_args
@@ -311,10 +297,7 @@ class DeadCodeInsertionPass(ObfuscationPass):
         if node.body: node.body = self.visit(node.body, symbol_map, **kwargs)
         return node
     
-    # Other node types can rely on generic_visit for this pass if they don't directly manage blocks
-    # or don't need special handling for dead code insertion.
 
-# --- Main Obfuscator Class ---
 class Obfuscator:
     def __init__(self, techniques=None):
         self.passes = []
@@ -325,8 +308,7 @@ class Obfuscator:
             self.passes.append(IdentifierRenamingPass())
         if "dead_code" in techniques:
             self.passes.append(DeadCodeInsertionPass(probability=0.25))
-        # Add more passes here based on the 'techniques' list
-        # e.g., if "complicate_expressions" in techniques: self.passes.append(ExpressionComplicationPass())
+
 
     def apply_passes(self, ast_root):
         current_ast = ast_root
@@ -335,8 +317,6 @@ class Obfuscator:
             current_ast = p_instance.apply(current_ast) 
             if current_ast is None:
                 print(f"Error: Pass {p_instance.__class__.__name__} returned None. Reverting to original AST for this pass.")
-                # This indicates a bug in the pass; ideally, it should always return an AST node.
-                # For safety, one might return the AST state before this pass, but that's complex to manage here.
-                # Simplest is to stop or return the original ast_root.
-                return ast_root # Or raise an error
+
+                return ast_root
         return current_ast

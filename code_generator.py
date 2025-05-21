@@ -1,10 +1,9 @@
-# code_generator.py
 import ast_nodes as ast
 
 class CodeGenerator:
     def __init__(self):
         self.indent_level = 0
-        self.output_parts = [] # Use a list to join at the end for efficiency
+        self.output_parts = []
 
     def _indent_str(self):
         return "    " * self.indent_level
@@ -13,20 +12,20 @@ class CodeGenerator:
         for arg in args:
             self.output_parts.append(str(arg))
 
-    def _emit_line(self, *args): # Emits current indent, then args, then newline
+    def _emit_line(self, *args):
         self._emit(self._indent_str())
         for arg in args:
             self._emit(arg)
         self._emit("\n")
 
-    def generate(self, node): # THIS IS THE ENTRY POINT
+    def generate(self, node):
         self.output_parts = []
         self.indent_level = 0
         if node:
             self.visit(node)
         return "".join(self.output_parts)
 
-    def visit(self, node): # Generic dispatch method
+    def visit(self, node):
         if node is None:
             return
         method_name = 'visit_' + node.__class__.__name__.lower()
