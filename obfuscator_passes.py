@@ -1,6 +1,6 @@
 import random
 import string
-import ast_nodes as ast # Assuming your AST nodes are in ast_nodes.py
+import ast_nodes as ast
 
 class NameGenerator:
     def __init__(self, prefix="obf_"):
