@@ -1,11 +1,11 @@
 import sys
-from antlr4 import FileStream, CommonTokenStream, InputStream, tree  # ANTLR imports
+from antlr4 import FileStream, CommonTokenStream, InputStream, tree
 
 from generated_parser.MiniCLexer import MiniCLexer
 from generated_parser.MiniCParser import MiniCParser
 
-from ast_builder_visitor import ASTBuilderVisitor  # Our custom visitor to build our AST
-import ast_nodes as custom_ast  # Our custom AST node definitions (for reference/type checking)
+from ast_builder_visitor import ASTBuilderVisitor
+import ast_nodes as custom_ast
 
 import code_generator
 from obfuscator_passes import Obfuscator
