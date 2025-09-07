@@ -237,3 +237,38 @@ class CodeGenerator:
 
     def visit_boolliteralnode(self, node: ast.BoolLiteralNode):
         self._emit("true" if node.value else "false")
+    # در فایل CodeGenerator.py یا مشابه آن
+
+    def visit_switchcasenode(self, node: ast.SwitchCaseNode):
+        self._emit_line("switch (")
+        self.visit(node.expression)
+        self._emit(") {\n")
+        self.indent_level += 1
+
+        for case in node.cases:
+            self.visit(case)
+            
+        if node.default:
+            self.visit(node.default)
+            
+        self.indent_level -= 1
+        self._emit_line("}")
+
+    def visit_casenode(self, node: ast.CaseNode):
+        self._emit(self._indent_str())
+        self._emit("case ")
+        self.visit(node.value)
+        self._emit(":\n")
+        
+        self.indent_level += 1
+        self.visit(node.body)
+        self.indent_level -= 1
+
+    def visit_defaultnode(self, node: ast.DefaultNode):
+        self._emit_line("default:")
+        self.indent_level += 1
+        self.visit(node.body)
+        self.indent_level -= 1
+
+    def visit_breaknode(self, node: ast.BreakNode):
+        self._emit_line("break;")

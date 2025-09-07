@@ -72,7 +72,6 @@ class ASTBuilderVisitor(MiniCVisitor):
 
     def visitStatement(self, ctx: MiniCParser.StatementContext):
         if ctx.variableDeclaration():
-
             return self.visit(ctx.variableDeclaration())
         elif ctx.expression():
             expr_node = self.visit(ctx.expression())
@@ -85,6 +84,12 @@ class ASTBuilderVisitor(MiniCVisitor):
             return self.visit(ctx.forStatement())
         elif ctx.returnStatement():
             return self.visit(ctx.returnStatement())
+        # Add a new condition to handle switch statements
+        elif ctx.switchStatement():
+            return self.visit(ctx.switchStatement())
+        # Add a new condition for break statements
+        elif ctx.BREAK():
+            return custom_ast.BreakNode(line_no=self.get_line_number(ctx))
         elif ctx.LBRACE() and ctx.blockContent() and ctx.RBRACE():
             stmts_in_block = self.visit(ctx.blockContent())
             return custom_ast.BlockNode(stmts_in_block, line_no=self.get_line_number(ctx.LBRACE()))
@@ -296,3 +301,46 @@ class ASTBuilderVisitor(MiniCVisitor):
         elif ctx.FALSE():
             return custom_ast.BoolLiteralNode(False, line_no=line_num)
         return None
+    
+    def visitSwitchStatement(self, ctx: MiniCParser.SwitchStatementContext):
+        expression_node = self.visit(ctx.expression())
+        
+        cases = []
+        default_node = None
+        
+        # Collect all case and default contexts
+        for case_ctx in ctx.caseStatement():
+            cases.append(self.visit(case_ctx))
+        
+        if ctx.defaultStatement():
+            default_node = self.visit(ctx.defaultStatement())
+
+        return custom_ast.SwitchCaseNode(expression_node, cases, default_node, line_no=self.get_line_number(ctx))
+
+    def visitCaseStatement(self, ctx: MiniCParser.CaseStatementContext):
+        # A case statement is a value (e.g., `1`) and a body of statements.
+        value_node = self.visit(ctx.literal())
+        
+        # Body can be a single statement or a block
+        body_statements = []
+        for stmt_ctx in ctx.statement():
+            body_statements.append(self.visit(stmt_ctx))
+
+        # Filter out None values and create a BlockNode if more than one statement exists
+        body_statements = [s for s in body_statements if s is not None]
+        body_node = custom_ast.BlockNode(body_statements, line_no=self.get_line_number(ctx))
+
+        return custom_ast.CaseNode(value_node, body_node, line_no=self.get_line_number(ctx))
+        
+    def visitDefaultStatement(self, ctx: MiniCParser.DefaultStatementContext):
+        body_statements = []
+        for stmt_ctx in ctx.statement():
+            body_statements.append(self.visit(stmt_ctx))
+        
+        body_statements = [s for s in body_statements if s is not None]
+        body_node = custom_ast.BlockNode(body_statements, line_no=self.get_line_number(ctx))
+
+        return custom_ast.DefaultNode(body_node, line_no=self.get_line_number(ctx))
+
+    def visitBreakStatement(self, ctx: MiniCParser.BreakStatementContext):
+        return custom_ast.BreakNode(line_no=self.get_line_number(ctx))

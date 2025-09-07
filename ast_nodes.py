@@ -142,3 +142,25 @@ class BoolLiteralNode(Node):
     def __init__(self, value, line_no=None):
         super().__init__(line_no)
         self.value = value
+
+class SwitchCaseNode(Node):
+    def __init__(self, expression, cases, default=None, line_no=None):
+        super().__init__(line_no)
+        self.expression = expression # عبارتی که در switch بررسی می‌شود (مثلا var4)
+        self.cases = cases           # لیستی از گره‌های CaseNode
+        self.default = default       # بلوک default (اگر وجود داشته باشد)
+
+class CaseNode(Node):
+    def __init__(self, value, body, line_no=None):
+        super().__init__(line_no)
+        self.value = value           # مقدار case (مثلا 1 یا 2)
+        self.body = body             # بلوک دستورات مربوط به این case
+
+class BreakNode(Node):
+    def __init__(self, line_no=None):
+        super().__init__(line_no)
+
+class DefaultNode(Node):
+    def __init__(self, body, line_no=None):
+        super().__init__(line_no)
+        self.body = body  # The block of statements inside the default case.
